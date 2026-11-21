@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EventPulse — Flash-Sale Seat-Locking & Live Box Office</title>
+  <style>
+    :root {
+      --bg: #090812;
+      --surface: #131124;
+      --border: #272347;
+      --text: #eef0ff;
+      --muted: #9390b8;
+      --purple: #a855f7;
+      --pink: #ec4899;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 15px 26px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    header h1 { margin: 0; font-size: 20px; background: linear-gradient(90deg, var(--purple), var(--pink)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .btn-rush { background: linear-gradient(90deg, var(--purple), var(--pink)); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .container { max-width: 1300px; margin: 20px auto; padding: 0 20px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 15px; }
+    .kpi .label { font-size: 12px; color: var(--muted); text-transform: uppercase; }
+    .kpi .val { font-size: 26px; font-weight: 800; margin-top: 5px; }
+    .layout { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .stage { background: linear-gradient(90deg, rgba(168,85,247,0.2), rgba(236,72,153,0.2)); border: 1px solid var(--purple); border-radius: 10px; text-align: center; padding: 10px; font-weight: 800; letter-spacing: 3px; font-size: 13px; color: #e9d5ff; margin-bottom: 18px; }
+    .tier-row { margin-bottom: 14px; }
+    .tier-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .seat-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .seat { border-radius: 9px; padding: 10px 6px; text-align: center; font-weight: 800; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: transform 0.1s ease; }
+    .seat:hover { transform: translateY(-2px); }
+    .seat.AVAILABLE { background: #1a1833; border-color: #343063; color: var(--text); }
+    .seat.MINE { background: rgba(34,197,94,0.22); border-color: var(--green); color: #86efac; }
+    .seat.HELD { background: rgba(245,158,11,0.2); border-color: var(--amber); color: #fcd34d; }
+    .seat.BOOKED { background: #181624; border-color: #242136; color: #524e73; cursor: not-allowed; }
+    .seat small { display: block; font-size: 10px; font-weight: 600; margin-top: 3px; }
+    .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 14px; flex-wrap: wrap; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .field input { width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--border); background: #090812; color: var(--text); }
+    .btn-confirm { width: 100%; padding: 11px; border: none; border-radius: 8px; background: var(--green); color: #042411; font-weight: 800; font-size: 14px; cursor: pointer; }
+    .cart-item { display: flex; justify-content: space-between; align-items: center; background: #0d0c1c; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EventPulse · Live Flash-Sale Arena & TTL Seat-Locking Box Office</h1>
+    <button class="btn-rush" onclick="simulateRush()">⚡ Simulate Flash-Sale Bot Rush</button>
+  </header>
+
+  <div class="container">
+    <div class="kpis">
+      <div class="kpi"><div class="label">Available Seats</div><div class="val" style="color:var(--green)" id="k-avail">0 / 24</div></div>
+      <div class="kpi"><div class="label">Active TTL Holds (90s Lock)</div><div class="val" style="color:var(--amber)" id="k-held">0</div></div>
+      <div class="kpi"><div class="label">Confirmed Tickets Sold</div><div class="val" style="color:var(--purple)" id="k-sold">0</div></div>
+      <div class="kpi"><div class="label">Box Office Gross (Incl. GST)</div><div class="val" style="color:var(--pink)" id="k-rev">₹0</div></div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="stage">MAIN CONCERT STAGE · LIVE TELEMETRY</div>
+        <div id="seat-map"></div>
+        <div class="legend">
+          <span>■ <strong>Available</strong> (Click to lock for 90s)</span>
+          <span style="color:#86efac">■ <strong>Your Active Hold</strong> (Click to release)</span>
+          <span style="color:#fcd34d">■ <strong>Locked by Another Buyer</strong></span>
+          <span style="color:#6d6896">■ <strong>Sold Out</strong></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 style="margin:0 0 12px;font-size:16px;color:#e9d5ff">Your Checkout Cart (90-Second Lock Protection)</h2>
+        <div id="cart-box" style="margin-bottom:14px"></div>
+
+        <div class="field"><label>Attendee Full Name</label><input id="b-name" placeholder="e.g. Bharath Kumar" /></div>
+        <div class="field"><label>E-Ticket Email</label><input id="b-email" value="bharath@eventpulse.io" /></div>
+        <button class="btn-confirm" onclick="confirmCheckout()">Confirm & Pay (Incl. 18% GST)</button>
+
+        <h3 style="margin:20px 0 10px;font-size:14px;color:var(--muted)">Recent Confirmed E-Tickets</h3>
+        <div id="recent-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sessionToken = 'web-' + Math.random().toString(36).substring(2, 11);
+    let state = { serverNowMs: Date.now(), metrics: {}, seats: [], recentBookings: [] };
+    let clientOffsetMs = 0;
+
+    async function loadState() {
+      const res = await fetch('/api/state');
+      state = await res.json();
+      clientOffsetMs = state.serverNowMs - Date.now();
+
+      document.getElementById('k-avail').textContent = `${state.metrics.available} / ${state.metrics.totalSeats}`;
+      document.getElementById('k-held').textContent = state.metrics.held;
+      document.getElementById('k-sold').textContent = state.metrics.booked;
+      document.getElementById('k-rev').textContent = '₹' + state.metrics.revenue.toLocaleString('en-IN');
+
+      renderMap();
+      renderCart();
+      renderRecent();
+    }
+
+    function secsLeft(expiresMs) {
+      const estServerNow = Date.now() + clientOffsetMs;
+      return Math.max(0, Math.ceil((expiresMs - estServerNow) / 1000));
+    }
+
+    function renderMap() {
+      const rows = ['A', 'B', 'C', 'D'];
+      const mapEl = document.getElementById('seat-map');
+      mapEl.innerHTML = rows.map(r => {
+        const rowSeats = state.seats.filter(s => s.row === r);
+        if (!rowSeats.length) return '';
+        const tierName = rowSeats[0].tier;
+        const price = rowSeats[0].price;
+
+        const cells = rowSeats.map(s => {
+          let cls = s.status;
+          let sub = `₹${s.price}`;
+          if (s.status === 'HELD') {
+            const rem = secsLeft(s.holdExpiresAtMs);
+            if (s.holdToken === sessionToken) {
+              cls = 'MINE';
+              sub = `LOCKED ${rem}s`;
+            } else {
+              sub = `HELD ${rem}s`;
+            }
+          } else if (s.status === 'BOOKED') {
+            sub = 'SOLD';
+          }
+          return `<div class="seat ${cls}" onclick="handleSeatClick('${s.seatCode}', '${cls}')">${s.seatCode}<small>${sub}</small></div>`;
+        }).join('');
+
+        return `
+          <div class="tier-row">
+            <div class="tier-label"><strong>Row ${r} · ${tierName}</strong><span>₹${price} + GST</span></div>
+            <div class="seat-row">${cells}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderCart() {
+      const mySeats = state.seats.filter(s => s.status === 'HELD' && s.holdToken === sessionToken);
+      const box = document.getElementById('cart-box');
+      if (!mySeats.length) {
+        box.innerHTML = '<div style="color:var(--muted);font-size:13px">Click any available seat on the map to lock it for 90 seconds (up to 4 seats).</div>';
+        return;
+      }
+      const sub = mySeats.reduce((acc, s) => acc + s.price, 0);
+      const gst = Math.round(sub * 0.18 * 100) / 100;
+      const tot = Math.round((sub + gst) * 100) / 100;
+
+      box.innerHTML = mySeats.map(s => `
+        <div class="cart-item">
+          <span><strong>${s.seatCode}</strong> (${s.tier}) · <span style="color:var(--amber)">${secsLeft(s.holdExpiresAtMs)}s left</span></span>
+          <span>₹${s.price} <button style="margin-left:6px;background:none;border:none;color:var(--red);cursor:pointer;font-weight:700" onclick="handleSeatClick('${s.seatCode}', 'MINE')">✕</button></span>
+        </div>
+      `).join('') + `
+        <div style="font-size:13px;padding-top:6px;border-top:1px dashed var(--border)">
+          <div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>₹${sub.toFixed(2)}</span></div>
+          <div style="display:flex;justify-content:space-between"><span>GST (18%)</span><span>₹${gst.toFixed(2)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;color:var(--green);margin-top:4px"><span>Total Payable</span><span>₹${tot.toFixed(2)}</span></div>
+        </div>`;
+    }
+
+    function renderRecent() {
+      const el = document.getElementById('recent-box');
+      el.innerHTML = state.recentBookings.map(b => `
+        <div style="border-bottom:1px solid var(--border);padding:7px 0;font-size:12.5px">
+          <div style="display:flex;justify-content:space-between"><strong>${b.bookingCode} · ${b.buyerName}</strong><span>₹${b.total.toFixed(2)}</span></div>
+          <div style="color:var(--muted)">Seats: ${b.seats}</div>
+        </div>
+      `).join('');
+    }
+
+    async function handleSeatClick(seatCode, effectiveClass) {
+      if (effectiveClass === 'BOOKED' || effectiveClass === 'HELD') return;
+      const url = effectiveClass === 'MINE' ? '/api/release' : '/api/hold';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seatCode, sessionToken, holderName: document.getElementById('b-name').value || 'Web Fan' })
+      });
+      const data = await res.json();
+      if (!data.ok) alert(data.error);
+      loadState();
+    }
+
+    async function confirmCheckout() {
+      const payload = {
+        sessionToken,
+        buyerName: document.getElementById('b-name').value || 'Verified Fan',
+        buyerEmail: document.getElementById('b-email').value || 'fan@eventpulse.io'
+      };
+      const res = await fetch('/api/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!data.ok) { alert(data.error); return; }
+      alert(`Booked ${data.ticket.bookingCode} (${data.ticket.seats}) — Paid ₹${data.ticket.total.toFixed(2)}!`);
+      loadState();
+    }
+
+    async function simulateRush() {
+      await fetch('/api/simulate-rush', { method: 'POST' });
+      loadState();
+    }
+
+    loadState();
+    setInterval(loadState, 3000);
+    setInterval(() => { renderMap(); renderCart(); }, 1000);
+  </script>
+</body>
+</html>
